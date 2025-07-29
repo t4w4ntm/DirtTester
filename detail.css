@@ -344,15 +344,3 @@ body {
         padding: 1rem;
     }
 }
-
-/* ---- Dark Mode Support ---- */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --light-bg: #1a2e1a;
-        --white: #2a3d2a;
-        --gray-100: #2a3d2a;
-        --gray-200: #3d4f3d;
-        --gray-800: #e8f5e8;
-        --gray-900: #ffffff;
-    }
-}
