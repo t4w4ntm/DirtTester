@@ -69,14 +69,14 @@ document.getElementById("soilForm").addEventListener("submit", async function (e
       mountain: document.getElementById("mountain").value,
       testDate: document.getElementById("testDate").value,
       testNumber: document.getElementById("testNumber").value,
-      ph: { value: parseFloat(document.getElementById("ph").value), level: document.getElementById("phLevel").value },
-      om: { value: parseFloat(document.getElementById("om").value), level: document.getElementById("omLevel").value },
-      n: { value: parseFloat(document.getElementById("n").value), level: document.getElementById("nLevel").value },
-      p: { value: parseFloat(document.getElementById("p").value), level: document.getElementById("pLevel").value },
-      k: { value: parseFloat(document.getElementById("k").value), level: document.getElementById("kLevel").value },
-      ec: { value: parseFloat(document.getElementById("ec").value), level: document.getElementById("ecLevel").value },
-      moisture: { value: parseFloat(document.getElementById("moisture").value), level: document.getElementById("moistureLevel").value },
-      temperature: { value: parseFloat(document.getElementById("temperature").value), level: document.getElementById("temperatureLevel").value },
+      ph: parseFloat(document.getElementById("ph").value),
+      om: parseFloat(document.getElementById("om").value),
+      n: parseFloat(document.getElementById("n").value),
+      p: parseFloat(document.getElementById("p").value),
+      k: parseFloat(document.getElementById("k").value),
+      ec: parseFloat(document.getElementById("ec").value),
+      moisture: parseFloat(document.getElementById("moisture").value),
+      temperature: parseFloat(document.getElementById("temperature").value),
       files: fileURLs, // <-- URL จาก Cloudinary
       createdAt: new Date()
     };
