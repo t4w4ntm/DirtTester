@@ -106,7 +106,12 @@ async function displayDetailData() {
                 <div class="card-header">
                     ${data.location} (${data.mountain})
                 </div>
+                
                 <div class="card-body">
+                    <div class="info-item">
+                        <span class="info-label">ช่วงอายุของกาแฟ</span>
+                        <span class="info-value">${data.coffeeAge || 'ไม่มีข้อมูล'}</span>
+                    </div>
                     <div class="info-item">
                         <span class="info-label">วันที่ทดสอบ</span>
                         <span class="info-value">${testDate}</span>
