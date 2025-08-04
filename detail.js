@@ -117,35 +117,35 @@ async function displayDetailData() {
                     </div>
                     <div class="info-item">
                         <span class="info-label">pH</span>
-                        <span class="info-value">${data.ph.value} (${data.ph.level})</span>
+                        <span class="info-value">${data.ph}</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">อินทรียวัตถุ (OM)</span>
-                        <span class="info-value">${data.om.value}% (${data.om.level})</span>
+                        <span class="info-value">${data.om}%</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">ไนโตรเจน (Total-N)</span>
-                        <span class="info-value">${data.n.value} mg/kg (${data.n.level})</span>
+                        <span class="info-value">${data.n} mg/kg</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">ฟอสฟอรัส (Avail.P)</span>
-                        <span class="info-value">${data.p.value} mg/kg (${data.p.level})</span>
+                        <span class="info-value">${data.p} mg/kg</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">โพแทสเซียม (Exch.K)</span>
-                        <span class="info-value">${data.k.value} mg/kg (${data.k.level})</span>
+                        <span class="info-value">${data.k} mg/kg</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">EC</span>
-                        <span class="info-value">${data.ec.value} mS/cm (${data.ec.level})</span>
+                        <span class="info-value">${data.ec} mS/cm</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">ความชื้น</span>
-                        <span class="info-value">${data.moisture.value}% (${data.moisture.level})</span>
+                        <span class="info-value">${data.moisture}%</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">อุณหภูมิ</span>
-                        <span class="info-value">${data.temperature.value}°C (${data.temperature.level})</span>
+                        <span class="info-value">${data.temperature}°C</span>
                     </div>
                     
                     ${imagesHTML}
