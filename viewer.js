@@ -57,14 +57,14 @@ async function displayData() {
                         <p class="card-text"><strong>วันที่ทดสอบ:</strong> ${testDate}</p>
                         <p class="card-text"><strong>ผลทดสอบที่:</strong> ${data.testNumber}</p>
                         <ul class="list-group list-group-flush">
-                            <li class="list-group-item">pH: ${data.ph.value} (ระดับ: ${data.ph.level})</li>
-                            <li class="list-group-item">OM: ${data.om.value}% (ระดับ: ${data.om.level})</li>
-                            <li class="list-group-item">Total-N: ${data.n.value} mg/kg (ระดับ: ${data.n.level})</li>
-                            <li class="list-group-item">Avail.P: ${data.p.value} mg/kg (ระดับ: ${data.p.level})</li>
-                            <li class="list-group-item">Exch.K: ${data.k.value} mg/kg (ระดับ: ${data.k.level})</li>
-                            <li class="list-group-item">EC: ${data.ec.value} mS/cm (ระดับ: ${data.ec.level})</li>
-                             <li class="list-group-item">Moisture: ${data.moisture.value}% (ระดับ: ${data.moisture.level})</li>
-                              <li class="list-group-item">Temperature: ${data.temperature.value}°C (ระดับ: ${data.temperature.level})</li>
+                            <li class="list-group-item">pH: ${data.ph}</li>
+                            <li class="list-group-item">OM: ${data.om}%</li>
+                            <li class="list-group-item">Total-N: ${data.n} mg/kg</li>
+                            <li class="list-group-item">Avail.P: ${data.p} mg/kg</li>
+                            <li class="list-group-item">Exch.K: ${data.k} mg/kg</li>
+                            <li class="list-group-item">EC: ${data.ec} mS/cm</li>
+                            <li class="list-group-item">Moisture: ${data.moisture}%</li>
+                            <li class="list-group-item">Temperature: ${data.temperature}°C</li>
                         </ul>
                         <h6 class="mt-3">รูปภาพประกอบ:</h6>
                         <div class="row">${imagesHTML || '<p>ไม่มีรูปภาพ</p>'}</div>
