@@ -10,6 +10,15 @@
     <div class="container">
         <h1>ข้อมูลการวิเคราะห์ดิน</h1>
         
+        <!-- Search Bar -->
+        <div class="search-bar" role="search">
+            <div class="search-inner">
+                <span class="search-icon" aria-hidden="true">🔎</span>
+                <input id="searchInput" type="search" placeholder="ค้นหา แปลง/ดอย/วันที่..." aria-label="ค้นหา" autocomplete="off" />
+                <button id="clearSearch" class="clear-btn" type="button" aria-label="ล้างการค้นหา">✕</button>
+            </div>
+        </div>
+        
         <div id="data-list" class="data-list">
             <p class="loading">กำลังโหลดข้อมูล...</p>
         </div>
