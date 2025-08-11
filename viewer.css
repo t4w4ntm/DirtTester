@@ -1,8 +1,12 @@
-/* ---- Import Google Font (Sarabun) ---- */
-@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
+/* ---- Import Google Font (Kanit) ---- */
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+
+* {
+    font-family: 'Kanit', sans-serif;
+}
 
 body {
-    font-family: 'Sarabun', sans-serif;
+    font-family: 'Kanit', sans-serif;
     background-color: #f7f8f4; /* เปลี่ยนเป็นสีเขียวอ่อน */
     padding: 20px;
 }
@@ -11,6 +15,7 @@ h1 {
     text-align: center;
     color: #333;
     font-weight: 700;
+    font-family: 'Kanit', sans-serif;
     margin-bottom: 40px; /* เพิ่มระยะห่างด้านล่าง */
 }
 
@@ -33,6 +38,7 @@ h1 {
     background-color: #4a3929; /* สีน้ำตาลเข้ม */
     color: white;
     font-weight: 700;
+    font-family: 'Kanit', sans-serif;
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
 }
@@ -61,19 +67,19 @@ h1 {
 /* ---- Image Styles ---- */
 .card-img-container {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px; /* ระยะห่างระหว่างรูป */
+    flex-direction: column; /* ให้เรียงแนวตั้งภาพละบรรทัด */
+    gap: 10px;
 }
 
 .card-img-wrapper {
-    flex: 1 1 calc(50% - 10px); /* ทำให้รูปมีขนาด 50% ของพื้นที่ */
-    max-width: calc(50% - 10px);
+    flex: 1 1 100%;
+    max-width: 100%;
 }
 
 .card-img-top {
     width: 100%;
-    height: 200px;
-    object-fit: cover; /* ทำให้รูปเต็มพื้นที่โดยไม่เสียสัดส่วน */
+    height: auto; /* ให้ภาพสูงตามสัดส่วน */
+    object-fit: contain; /* แสดงเต็มกว้างโดยไม่ตัดภาพ */
     border-radius: 8px;
     cursor: pointer;
     transition: opacity 0.2s ease-in-out;
@@ -89,6 +95,7 @@ h1 {
     align-items: center;
     gap: 0.5rem;
     font-weight: 600;
+    font-family: 'Kanit', sans-serif;
     color: #5a4a37;
     text-decoration: none;
     margin-bottom: 2rem;
