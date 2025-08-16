@@ -6,11 +6,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ฟอร์มบันทึกข้อมูลนักวิจัยพื้นที่</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="navbar.css">
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAPd8UeMjK_euJp_jasQCPFmQQHicmH-c4&callback=initMap&libraries=&v=weekly" defer></script>
+  
+  <!-- ซ่อนทะเบียนเกษตรกรทันทีถ้าอยู่ในช่วงวันที่ที่ต้องซ่อน -->
+  <script>
+    (function() {
+      function getCurrentDate() {
+        const params = new URLSearchParams(location.search);
+        let now;
+        if (params.has('testDate')) {
+          now = new Date(params.get('testDate') + 'T00:00:00');
+        } else if (window.__debugDate) {
+          now = new Date(window.__debugDate + 'T00:00:00');
+        } else {
+          now = new Date();
+        }
+        return now;
+      }
+      
+      function shouldHideFarmerSection() {
+        const now = getCurrentDate();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        return (year > 2025) || (year === 2025 && month >= 9);
+      }
+      
+      function shouldShowBeanYieldSection() {
+        const now = getCurrentDate();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        return (year > 2025) || (year === 2025 && month >= 12);
+      }
+      
+      if (shouldHideFarmerSection()) {
+        const style = document.createElement('style');
+        style.innerHTML = '#farmer_section { display: none !important; }';
+        document.head.appendChild(style);
+      }
+      
+      if (shouldShowBeanYieldSection()) {
+        const style = document.createElement('style');
+        style.innerHTML = '#bean_yield_section { display: block !important; }';
+        document.head.appendChild(style);
+      }
+    })();
+  </script>
 </head>
 
 <body>
-  <a href="index.html" class="btn-back">❮ กลับไปหน้าหลัก</a>
   <h2>ฟอร์มบันทึกข้อมูลนักวิจัยพื้นที่</h2>
 
   <form id="soilForm">
@@ -25,13 +69,24 @@
         </select>
       </label>
       <label>แปลงหมายเลขที่
-        <select id="plot_number" required>
+        <select id="plot_number" required disabled>
           <option value="" disabled selected>-- โปรดเลือกดอยก่อน --</option>
+        </select>
+      </label>
+      <label>ต้นกาแฟที่
+        <select id="coffee_tree" required disabled>
+          <option value="" disabled selected>-- โปรดเลือกดอยและแปลงก่อน --</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
         </select>
       </label>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="farmer_section">
       <legend>ทะเบียนเกษตรกร</legend>
       <label>ชื่อ นามสกุล
         <input type="text" id="farmer_name" required>
@@ -73,7 +128,7 @@
         </select>
       </label>
       <label>เบอร์ปุ๋ยที่ใส่ (เช่น 15-15-15)
-        <input type="text" id="fertilizer_formula">
+        <input type="text" id="fertilizer_formula" placeholder="xx-xx-xx" maxlength="8" required>
       </label>
       <label>จำนวนของปุ๋ยที่ใส่/ปี (ครั้ง/ปี)
         <input type="number" id="fertilizer_frequency" min="0" step="1" required>
@@ -184,6 +239,31 @@
       </label>
     </fieldset>
 
+    <fieldset id="bean_yield_section" style="display: none;">
+      <legend>ผลผลิตเมล็ดกาแฟ</legend>
+      <label>น้ำหนักผลสด (กรัม)
+        <input type="number" id="fresh_weight" min="0" step="1" required>
+      </label>
+      <label>น้ำหนักผลแห้ง (กะลา) (กรัม)
+        <input type="number" id="dry_weight" min="0" step="1" required>
+      </label>
+      <label>คุณภาพเมล็ด
+        <select id="bean_quality" required>
+          <option value="" disabled selected>-- เลือกคุณภาพเมล็ด --</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </label>
+    </fieldset>
+
     <fieldset>
       <legend>แนบรูปภาพเพิ่มเติม</legend>
       <div id="fileInputs"></div>
@@ -208,6 +288,7 @@
   </div>
 </div>
 
+  <script src="navbar.js"></script>
   <script src="script.js"></script>
 </body>
 
