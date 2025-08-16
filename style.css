@@ -42,7 +42,8 @@ body {
     min-height: 100vh;
     color: var(--gray-800);
     line-height: 1.6;
-    padding: 2rem 1rem;
+    padding: 0 1rem 1rem 1rem; /* ไม่มี padding-top เพื่อให้ navbar.css จัดการ */
+    margin: 0;
 }
 
 h2 {
@@ -50,7 +51,8 @@ h2 {
     color: var(--gray-900);
     font-weight: 700;
     font-size: clamp(1.75rem, 4vw, 2.5rem);
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem; /* ลด margin */
+    margin-top: 3.5rem; /* เพิ่ม margin-top เพื่อให้ห่างจาก navbar */
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -127,6 +129,13 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 input[type="number"] {
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+input[type="number"]:focus {
+    -webkit-appearance: textfield;
     -moz-appearance: textfield;
     appearance: textfield;
 }
@@ -269,26 +278,11 @@ legend {
 }
 
 .btn-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
-    color: var(--gray-600);
-    text-decoration: none;
-    margin-bottom: 2rem;
-    padding: 0.75rem 1rem;
-    border-radius: var(--border-radius);
-    transition: var(--transition);
-    background: var(--white);
-    border: 1px solid var(--gray-200);
-    box-shadow: var(--shadow-sm);
+    display: none;
 }
 
 .btn-back:hover {
-    color: var(--primary-color);
-    background: var(--gray-50);
-    transform: translateX(-4px);
-    box-shadow: var(--shadow);
+    display: none;
 }
 
 /* --- Styles for new features --- */
