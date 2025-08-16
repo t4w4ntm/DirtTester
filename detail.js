@@ -17,11 +17,73 @@ const db = firebase.firestore();
 
 const COLLECTION = "soil_tests_new";
 
+// ฟังก์ชันตรวจสอบวันที่สำหรับการซ่อนทะเบียนเกษตรกร (คัดลอกมาจาก script.js)
+function shouldHideFarmerSection(recordDate = null) {
+  // ถ้าไม่ส่งวันที่มา ใช้วันที่ปัจจุบัน
+  const now = recordDate || new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  
+  // ตั้งแต่ 1 กันยายน 2025 เป็นต้นไป
+  return (year > 2025) || (year === 2025 && month >= 9);
+}
+
+// ฟังก์ชันตรวจสอบวันที่สำหรับการแสดงผลผลิตเมล็ดกาแฟ
+function shouldShowBeanYieldSection(recordDate = null) {
+  // ถ้าไม่ส่งวันที่มา ใช้วันที่ปัจจุบัน (หรือ debug date)
+  let now;
+  if (recordDate) {
+    now = recordDate;
+  } else if (window.__debugDate) {
+    now = new Date(window.__debugDate + 'T00:00:00');
+  } else {
+    now = new Date();
+  }
+  
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  
+  // ตั้งแต่ 1 ธันวาคม 2025 เป็นต้นไป
+  return (year > 2025) || (year === 2025 && month >= 12);
+}
+
+// ฟังก์ชันตรวจสอบว่าบันทึกนี้ไม่มีข้อมูลทะเบียนเกษตรกรเพราะอยู่ในช่วงที่ไม่บังคับ
+function recordMissingFarmerDataDueToDate(data) {
+  if (!data.createdAt) {
+    console.log('❌ ไม่มี createdAt:', data);
+    return false;
+  }
+  
+  // แปลง Firebase Timestamp เป็น Date
+  const recordDate = data.createdAt.seconds ? 
+    new Date(data.createdAt.seconds * 1000) : 
+    new Date(data.createdAt);
+  
+  // ตรวจสอบว่าบันทึกนี้อยู่ในช่วงที่ไม่บังคับกรอกทะเบียนเกษตรกรหรือไม่
+  const hideFarmer = shouldHideFarmerSection(recordDate);
+  
+  // ตรวจสอบว่าไม่มีข้อมูลทะเบียนเกษตรกรสำคัญ
+  const missingFarmerData = !data.farmer_name || !data.age || !data.address;
+  
+  console.log('🔍 ตรวจสอบลิ้งค์ทะเบียนเกษตรกร:');
+  console.log('  📅 วันที่บันทึก:', recordDate.toLocaleDateString('th-TH'));
+  console.log('  🚫 ซ่อนทะเบียนตามวันที่:', hideFarmer);
+  console.log('  📝 ขาดข้อมูลเกษตรกร:', missingFarmerData, {
+    farmer_name: !!data.farmer_name,
+    age: !!data.age,
+    address: !!data.address
+  });
+  console.log('  🎯 ต้องลิ้งค์:', hideFarmer && missingFarmerData);
+  
+  return hideFarmer && missingFarmerData;
+}
+
 const FIELDS = [
   // label, key, type, options (ถ้ามี)
   ["ชื่อ นามสกุล","farmer_name","text"],
   ["ดอย","mountain","select",["ดอยช้าง","ดอยแม่สลอง"]],
   ["แปลงหมายเลข","plot_number","text"],
+  ["ต้นกาแฟที่","coffee_tree","select",["1","2","3","4","5","6"]],
   ["พิกัด GPS","gps_coordinates","text"],
 
   ["อายุ (ปี)","age","number"],
@@ -61,6 +123,11 @@ const FIELDS = [
   ["ปัญหาโรคพืช","disease_problem","select",["มีปกติ","มีน้อยกว่าปกติ","มีมากกว่าปกติ","ไม่มีเลย"]],
   ["ปัญหาแมลง","insect_problem","select",["มีปกติ","มีน้อยกว่าปกติ","มีมากกว่าปกติ","ไม่มีเลย"]],
   ["ปัญหาหนอน","worm_problem","select",["มีปกติ","มีน้อยกว่าปกติ","มีมากกว่าปกติ","ไม่มีเลย"]],
+
+  // ผลผลิตเมล็ดกาแฟ (ตั้งแต่ธันวาคม 2025)
+  ["น้ำหนักผลสด (กรัม)","fresh_weight","number"],
+  ["น้ำหนักผลแห้ง (กะลา) (กรัม)","dry_weight","number"],
+  ["คุณภาพเมล็ด","bean_quality","select",["1","2","3","4","5","6","7","8","9","10"]],
 ];
 
 // แปลง FIELDS เป็น map
@@ -70,7 +137,7 @@ const FIELD_META = Object.fromEntries(
 
 // โซน (เหมือน form.html)
 const SECTIONS = [
-  { title:'ข้อมูลแปลง', keys:['mountain','plot_number','gps_coordinates'] },
+  { title:'ข้อมูลแปลง', keys:['mountain','plot_number','coffee_tree','gps_coordinates'] },
   { title:'ทะเบียนเกษตรกร', keys:[
       'farmer_name','age','coffee_experience','planting_area','address',
       'water_system','fertilizer_type','fertilizer_formula','fertilizer_frequency',
@@ -84,6 +151,9 @@ const SECTIONS = [
   { title:'ติดตามการเจริญเติบโตต้นกาแฟ', keys:[
       'coffee_height','coffee_circumference','flowering','fruiting',
       'disease_problem','insect_problem','worm_problem'
+  ]},
+  { title:'ผลผลิตเมล็ดกาแฟ', keys:[
+      'fresh_weight','dry_weight','bean_quality'
   ]}
 ];
 
@@ -117,8 +187,8 @@ function buildFieldHTML(label,key,type,value,options,editing){
   const safeVal = value ?? '';
   const dataAttr = `data-key="${key}" data-type="${type}"`;
 
-  // 1) ล็อกไม่ให้แก้ "ดอย" และ "แปลงหมายเลข" ในโหมดแก้ไข
-  const lockedKeys = new Set(['mountain','plot_number']);
+  // 1) ล็อกไม่ให้แก้ "ดอย", "แปลงหมายเลข", และ "ต้นกาแฟ" ในโหมดแก้ไข
+  const lockedKeys = new Set(['mountain','plot_number','coffee_tree']);
   if (editing && lockedKeys.has(key)) {
     return `<div class="info-item locked-field" ${dataAttr}>
       <span class="info-label">${label}</span>
@@ -241,6 +311,125 @@ async function displayDetailData(){
   // Ensure files is always an array
   state.data.files = normalizeFiles(state.data.files);
 
+  // ถ้าเป็นต้นที่ 2-6 หรือเป็นบันทึกที่ไม่มีข้อมูลทะเบียนเกษตรกรเพราะอยู่ในช่วงไม่บังคับ
+  // ให้ดึงข้อมูลทะเบียนเกษตรกรจากต้นที่ 1 ของแปลงเดียวกัน (ถ้ามี) เพื่อเติม
+  try {
+    const ct = state.data.coffee_tree;
+    const isTree2to6 = ct && ct !== '1';
+    
+    // สำหรับต้นที่ 1: ตรวจสอบว่าอยู่ในช่วงไม่บังคับและไม่มีข้อมูลทะเบียนเกษตรกร
+    const isTree1NeedingLink = (ct === '1') && recordMissingFarmerDataDueToDate(state.data);
+    
+    // ต้นที่ 2-6 ลิ้งค์เสมอ หรือ ต้นที่ 1 ที่ต้องการลิ้งค์
+    const needsFarmerMerge = isTree2to6 || isTree1NeedingLink;
+    
+    console.log('🌳 ข้อมูลต้นกาแฟ:', ct);
+    console.log('🔗 ตรวจสอบการลิ้งค์:', {
+      isTree2to6,
+      isTree1NeedingLink,
+      needsFarmerMerge,
+      reason: isTree2to6 ? 'ต้นที่ 2-6 (ลิ้งค์เสมอ)' : 
+              isTree1NeedingLink ? 'ต้นที่ 1 หลัง 1 ก.ย. ไม่มีทะเบียนเกษตรกร' : 
+              'ไม่ต้องลิ้งค์'
+    });
+    
+    if (needsFarmerMerge) {
+      const mountain = state.data.mountain;
+      const plot = state.data.plot_number;
+      console.log('🏔️ ค้นหาข้อมูลต้นที่ 1 ของ:', { mountain, plot });
+      
+      if (mountain && plot) {
+        let primarySnap = null;
+        try {
+          // ค้นหาต้นที่ 1 ของแปลงเดียวกันที่มีข้อมูลทะเบียนเกษตรกร
+          primarySnap = await db.collection(COLLECTION)
+            .where('mountain','==', mountain)
+            .where('plot_number','==', plot)
+            .where('coffee_tree','==', '1')
+            .orderBy('createdAt','desc')
+            .get();
+        } catch(err){
+          console.log('⚠️ fallback query (ไม่ใช้ orderBy)');
+          // fallback ไม่ใช้ orderBy
+          const fb = await db.collection(COLLECTION)
+            .where('mountain','==', mountain)
+            .where('plot_number','==', plot)
+            .where('coffee_tree','==', '1')
+            .get();
+          const docs = [];
+          fb.forEach(d => docs.push({id:d.id,...d.data()}));
+          if(docs.length){
+            docs.sort((a,b)=>{
+              const ta = a.createdAt?.seconds ? a.createdAt.seconds*1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+              const tb = b.createdAt?.seconds ? b.createdAt.seconds*1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+              return tb - ta;
+            });
+            primarySnap = { empty:false, docs:docs.map(d => ({data:()=>d})) };
+          }
+        }
+        
+        console.log('📋 ผลการค้นหาต้นที่ 1:', primarySnap?.empty ? 'ไม่พบ' : `พบ ${primarySnap.docs?.length || 0} รายการ`);
+        
+        // หาต้นที่ 1 ที่มีข้อมูลทะเบียนเกษตรกร
+        let foundBaseData = null;
+        if (primarySnap && !primarySnap.empty) {
+          for (const doc of primarySnap.docs) {
+            const candidateData = doc.data();
+            // ตรวจสอบว่ามีข้อมูลทะเบียนเกษตรกรหรือไม่
+            if (candidateData.farmer_name && candidateData.age && candidateData.address) {
+              foundBaseData = candidateData;
+              console.log('✅ พบต้นที่ 1 ที่มีข้อมูลทะเบียนเกษตรกร');
+              break;
+            }
+          }
+          
+          if (!foundBaseData) {
+            console.log('❌ ไม่พบต้นที่ 1 ที่มีข้อมูลทะเบียนเกษตรกรครบถ้วน');
+          }
+        }
+        
+        if (foundBaseData) {
+          console.log('📊 ข้อมูลต้นที่ 1:', {
+            farmer_name: foundBaseData.farmer_name,
+            age: foundBaseData.age,
+            address: foundBaseData.address
+          });
+          
+          const farmerKeys = [
+            'farmer_name','age','coffee_experience','planting_area','address',
+            'water_system','fertilizer_type','fertilizer_formula','fertilizer_frequency',
+            'fertilizer_amount','soil_problems','yield_problems','internet_access',
+            'yield_per_tree','cupping_experience','fertilizer_cost','labor_cost','other_costs','gps_coordinates'
+          ];
+          
+          let mergedCount = 0;
+          farmerKeys.forEach(k=>{
+            const val = state.data[k];
+            if (val===undefined || val===null || val==='') {
+              if (foundBaseData[k] !== undefined && foundBaseData[k] !== null && foundBaseData[k] !== '') {
+                state.data[k] = foundBaseData[k];
+                mergedCount++;
+              }
+            }
+          });
+          
+          console.log(`✅ ลิ้งค์สำเร็จ: ${mergedCount} ฟิลด์`);
+          
+          // แสดงข้อความแจ้งเตือนว่าลิ้งค์ข้อมูลมาจากไหน
+          if (isTree2to6) {
+            console.log('🔗 ลิ้งค์ข้อมูลทะเบียนเกษตรกรจากต้นที่ 1 (ต้น 2-6)');
+          } else if (isTree1NeedingLink) {
+            console.log('🔗 ลิ้งค์ข้อมูลทะเบียนเกษตรกรจากต้นที่ 1 (บันทึกนี้อยู่ในช่วงไม่บังคับกรอกทะเบียน)');
+          }
+        } else {
+          console.log('❌ ไม่พบข้อมูลต้นที่ 1 ที่มีข้อมูลทะเบียนเกษตรกรในแปลงและดอยเดียวกัน');
+        }
+      }
+    }
+  } catch(mergeErr){
+    console.warn('merge farmer data from tree 1 failed:', mergeErr);
+  }
+
   render(false);
 }
 
@@ -264,13 +453,20 @@ async function refreshData(){
 function render(editing){
   const container = document.getElementById('detail-container');
   const d = state.data;
+  
+  // ตรวจสอบข้อมูลผลผลิตเมล็ดกาแฟ
+  console.log('🌾 ข้อมูลผลผลิตเมล็ดกาแฟ:', {
+    fresh_weight: d.fresh_weight,
+    dry_weight: d.dry_weight, 
+    bean_quality: d.bean_quality
+  });
 
   const createdAt = toDateSafe(d.createdAt);
   const createdText = createdAt
     ? createdAt.toLocaleString('th-TH',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})
     : '-';
 
-  const headerTitle = [d.mountain, d.plot_number].filter(Boolean).join('-') || '(ไม่ระบุข้อมูล)';
+  const headerTitle = [d.mountain, d.plot_number, d.coffee_tree ? `ต้นที่ ${d.coffee_tree}` : ''].filter(Boolean).join(' - ') || '(ไม่ระบุข้อมูล)';
 
   // helper: สร้าง info-item จาก key
   const buildItemByKey = (key)=> {
@@ -286,6 +482,15 @@ function render(editing){
 
   // Sections
   const sectionsHTML = SECTIONS.map((sec, idx)=>{
+    // ตรวจสอบว่าควรแสดงโซนผลผลิตเมล็ดกาแฟหรือไม่ (ใช้วันที่บันทึกข้อมูล)
+    if (sec.title === 'ผลผลิตเมล็ดกาแฟ') {
+      const showBeanYield = shouldShowBeanYieldSection(createdAt);
+      console.log('🌾 การแสดงผลผลิตเมล็ดกาแฟ (ตามวันที่บันทึก):', showBeanYield, 'createdAt:', createdAt);
+      if (!showBeanYield) {
+        return ''; // ไม่แสดงโซนนี้ถ้าบันทึกก่อนเดือนธันวาคม 2025
+      }
+    }
+    
     let bodyHTML = '';
     if (sec.title === 'วัดค่าดิน ด้วยเครื่องวัดดินแบบพกพา') {
       bodyHTML = buildPortableTable(editing, d);
@@ -299,7 +504,7 @@ function render(editing){
         <div class="section-body">${bodyHTML}</div>
       </section>
     `;
-  }).join('');
+  }).filter(Boolean).join(''); // filter(Boolean) เพื่อลบ empty string ออก
 
   // Images section (มีช่องเพิ่มรูปในโหมดแก้ไข)
   const existingImgs = buildImagesHTML(d.files, editing);
@@ -334,12 +539,6 @@ function render(editing){
 
         <div class="header-actions" ${editing ? 'style="display: none;"' : ''}>
           <button id="editToggle" class="btn-edit" aria-label="แก้ไข">แก้ไขข้อมูล</button>
-          <div class="export-wrap">
-            <button id="exportBtn" class="btn-export">Export</button>
-            <div id="exportMenu" class="export-menu" hidden>        
-              <button data-type="csv">Export as CSV</button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -385,7 +584,7 @@ function render(editing){
         console.log('ข้อมูลถูกรีเฟรชจากฐานข้อมูลแล้ว');
       } else {
         alert('ไม่พบข้อมูลที่ต้องการ');
-        window.location.href = 'index.html';
+        window.location.href = 'home.html';
       }
     } catch(error) {
       console.error('Error during cancel operation:', error);
@@ -397,28 +596,6 @@ function render(editing){
       cancelBtn.textContent = originalText;
     }
   };
-
-  // === Export menu bindings ===
-  const exportBtn = document.getElementById('exportBtn');
-  const exportMenu = document.getElementById('exportMenu');
-  if (exportBtn && exportMenu) {
-    exportBtn.onclick = (e) => {
-      e.stopPropagation();
-      exportMenu.hidden = !exportMenu.hidden;
-    };
-    document.addEventListener('click', (e) => {
-      if (!exportMenu.contains(e.target) && e.target !== exportBtn) {
-        exportMenu.hidden = true;
-      }
-    });
-    exportMenu.addEventListener('click', (e) => {
-      const type = e.target?.getAttribute('data-type');
-      if (!type) return;
-      exportMenu.hidden = true;
-      if (type === 'csv')  return exportCSV();
-      
-    });
-  }
 
   // auto-format สูตรปุ๋ยตอนแก้ไข
   if(editing){
@@ -546,6 +723,11 @@ if (mapBtn) {
     updateNewPreviewFromArray();
 
     // ไม่เพิ่ม input แรกทันที ให้รอกดปุ่มก่อน
+  }
+  
+  // *** เพิ่มการป้องกันลูกกลิ้งเมาส์ในโหมดแก้ไข ***
+  if (editing) {
+    preventDetailNumberInputScroll();
   }
 }
 
@@ -697,7 +879,7 @@ async function onDelete(){
   try{
     await db.collection(COLLECTION).doc(state.docId).delete();
     alert("ลบข้อมูลเรียบร้อยแล้ว!");
-    location.href = "index.html";
+    location.href = "home.html";
   }catch(err){
     console.error(err);
     alert("เกิดข้อผิดพลาดในการลบข้อมูล");
@@ -750,8 +932,8 @@ function downloadBlob(filename, mime, content) {
 }
 function getExportFilename(ext){
   const d = state.data || {};
-  // เอา plot_number เป็นหลัก + เติมดอยถ้ามี
-  const base = [d.mountain, d.plot_number].filter(Boolean).join('-') || 'soil_detail';
+  // เอา plot_number เป็นหลัก + เติมดอย และต้นกาแฟถ้ามี
+  const base = [d.mountain, d.plot_number, d.coffee_tree ? `ต้น${d.coffee_tree}` : ''].filter(Boolean).join('-') || 'soil_detail';
   // ล้างอักขระต้องห้ามในไฟล์เนม
   const safe = base.replace(/[\\/:*?"<>|]+/g, '_').trim();
   return `${safe}.${ext}`;
@@ -759,23 +941,6 @@ function getExportFilename(ext){
 
 
 
-
-function exportCSV() {
-  const sections = collectOrderedPairs();
-  const rows = [];
-  rows.push(['หมวด', 'ฟิลด์', 'ค่า']);
-
-  sections.forEach(sec => {
-    sec.items.forEach(it => {
-      const esc = (v)=> `"${String(v??'').replace(/"/g,'""').replace(/\r?\n/g, ' ')}"`;
-      rows.push([esc(sec.section), esc(it.label), esc(it.value)]);
-    });
-  });
-
-  const csv = rows.map(r => r.join(',')).join('\r\n');
-  const bom = '\uFEFF'; // ให้ Excel อ่านไทยถูก
-  downloadBlob(getExportFilename('csv'), 'text/csv;charset=utf-8', bom + csv);
-}
 
 // ค่าเริ่มต้น (ภาคเหนือไทย)
 const defaultDetailPosition = { lat: 19.0333, lng: 99.8333 };
@@ -814,25 +979,49 @@ function preventDetailNumberInputScroll() {
   const numberInputs = document.querySelectorAll('input[type="number"]');
   
   numberInputs.forEach(function(input) {
-    // ป้องกันการเปลี่ยนค่าแต่ยังให้เลื่อนหน้าได้
-    input.addEventListener('wheel', function(e) {
-      // ถ้า input นี้กำลังถูก focus อยู่
-      if (document.activeElement === this) {
-        // บันทึกค่าเดิม
-        const originalValue = this.value;
-        
-        // ให้ wheel event ทำงาน (เพื่อเลื่อนหน้า)
-        // แต่จะกู้คืนค่าเดิมกลับมาทันที
-        setTimeout(() => {
-          this.value = originalValue;
-        }, 0);
-      }
-    });
+    // ลบ event listener เก่าก่อน (ป้องกันการซ้ำ)
+    input.removeEventListener('wheel', input._wheelHandler);
+    
+    // สร้าง event handler ใหม่
+    input._wheelHandler = function(e) {
+      // ป้องกันการเปลี่ยนค่าเฉพาะ input เท่านั้น
+      e.preventDefault();
+      
+      // ให้หน้าจอเลื่อนได้ปกติ
+      window.scrollBy(0, e.deltaY);
+    };
+    
+    // เพิ่ม event listener ใหม่ (ไม่ใช้ passive: false)
+    input.addEventListener('wheel', input._wheelHandler);
   });
 }
 
 // เรียกใช้ฟังก์ชันทุกครั้งที่ render โหมดแก้ไข
 // จะถูกเรียกใน render function โดยตรง
+
+// =========================
+// 🚀 Global Event Listeners เพื่อป้องกันลูกกลิ้งเมาส์
+// =========================
+
+// ป้องกันการเปลี่ยนค่าของ input[type="number"] เมื่อเลื่อนลูกกลิ้งเมาส์ (แต่ยังให้เลื่อนหน้าได้)
+document.addEventListener('wheel', function(e) {
+  if (e.target.type === 'number') {
+    // ป้องกันการเปลี่ยนค่าเฉพาะ input แต่ให้เลื่อนหน้าจอได้
+    e.preventDefault();
+    
+    // ให้หน้าจอเลื่อนได้ปกติ
+    window.scrollBy(0, e.deltaY);
+  }
+}, { passive: false });
+
+// ป้องกันการเปลี่ยนค่าของ input[type="number"] เมื่อใช้ arrow keys
+document.addEventListener('keydown', function(e) {
+  if (e.target.type === 'number' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault();
+  }
+});
+
+console.log('🔒 Detail page: ป้องกันการเปลี่ยนค่า input number แต่ยังเลื่อนหน้าได้');
 
 
 
