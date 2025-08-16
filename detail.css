@@ -21,9 +21,9 @@
 *{margin:0; padding:0; box-sizing:border-box; font-family:'Kanit',sans-serif;}
 body{
   font-family:'Kanit',sans-serif; background:linear-gradient(135deg,var(--light-bg),var(--gray-100));
-  min-height:100vh; color:var(--gray-800); line-height:1.6; padding:2rem 1rem;
+  min-height:100vh; color:var(--gray-800); line-height:1.6; padding:0 1rem 2rem 1rem;
 }
-.container{max-width:1000px; margin:0 auto;}
+.container{max-width:1000px; margin:0 auto; padding: 1rem; margin-top: 4rem;} /* เพิ่ม margin-top เพื่อให้ห่างจากปุ่ม fixed */
 
 /* Back Button */
 .btn-back{
@@ -32,6 +32,34 @@ body{
   transition:var(--transition); background:var(--white); border:1px solid var(--gray-200); box-shadow:var(--shadow-sm);
 }
 .btn-back:hover{color:var(--primary-color); background:#fff; transform:translateX(-4px); box-shadow:var(--shadow);}
+
+/* Fixed Back Button - ติดมุมบนซ้าย */
+.btn-back-fixed{
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  font-weight: 600;
+  color: var(--gray-600);
+  text-decoration: none;
+  padding: .75rem 1rem;
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-md);
+  font-family: 'Kanit', sans-serif;
+}
+.btn-back-fixed:hover{
+  color: var(--primary-color);
+  background: #fff;
+  transform: translateX(-4px);
+  box-shadow: var(--shadow-lg);
+  text-decoration: none;
+}
 
 /* Loading */
 .loading{
