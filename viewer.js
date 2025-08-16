@@ -57,7 +57,7 @@ async function displayData() {
             card.innerHTML = `
                 <div class="card">
                     <div class="card-header">
-                        ดอย ${data.mountain || '-'} - แปลง ${data.plot_number || '-'}
+                        ดอย ${data.mountain || '-'} - แปลง ${data.plot_number || '-'}${data.coffee_tree ? ` - ต้นที่ ${data.coffee_tree}` : ''}
                     </div>
                     <div class="card-body">
                         <p class="card-text"><strong>วันที่บันทึก:</strong> ${testDate}</p>
@@ -86,4 +86,7 @@ async function displayData() {
 }
 
 // เรียกใช้ฟังก์ชันเมื่อหน้าเว็บโหลดเสร็จ
-window.onload = displayData;
+window.onload = () => {
+    initNavbar('viewer');
+    displayData();
+};
