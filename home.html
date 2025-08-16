@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>หน้าหลัก - ข้อมูลการวิเคราะห์ดิน</title>
     <link rel="stylesheet" href="home.css">
+    <link rel="stylesheet" href="navbar.css">
 </head>
 <body>
     <div class="container">
@@ -14,7 +15,7 @@
         <div class="search-bar" role="search">
             <div class="search-inner">
                 <span class="search-icon" aria-hidden="true">🔎</span>
-                <input id="searchInput" type="search" placeholder="ค้นหา แปลง/ดอย/วันที่..." aria-label="ค้นหา" autocomplete="off" />
+                <input id="searchInput" type="text" placeholder="ค้นหา แปลง/ดอย/วันที่..." aria-label="ค้นหา" autocomplete="off" />
                 <button id="clearSearch" class="clear-btn" type="button" aria-label="ล้างการค้นหา">✕</button>
             </div>
         </div>
@@ -22,16 +23,12 @@
         <div id="data-list" class="data-list">
             <p class="loading">กำลังโหลดข้อมูล...</p>
         </div>
-        
-        <!-- ปุ่มเพิ่มข้อมูลใหม่ -->
-        <a href="form.html" class="add-btn" title="เพิ่มข้อมูลใหม่">
-            <span class="plus-icon">+</span>
-        </a>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     
+    <script src="navbar.js"></script>
     <script src="home.js"></script>
 </body>
 </html>
