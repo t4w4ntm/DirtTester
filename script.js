@@ -15,6 +15,322 @@ const firebaseConfig = {
 const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dfix1lo9q/image/upload";
 const CLOUDINARY_UPLOAD_PRESET = "soil_test_uploads";
 
+// =========================
+// � ระบบเก็บข้อมูลทะเบียนเกษตรกร
+// =========================
+
+// เก็บข้อมูลทะเบียนเกษตรกรสำหรับใช้ร่วมกันระหว่างต้นทั้งหมด
+let farmerData = {};
+
+// =========================
+// �🕐 ระบบจัดการวันที่ (รองรับการทดสอบ)
+// =========================
+
+function getCurrentDate() {
+  // 1) Query parameter สำหรับทดสอบ: ?testDate=2025-09-10
+  const params = new URLSearchParams(location.search);
+  if (params.has('testDate')) {
+    const testDate = new Date(params.get('testDate') + 'T00:00:00');
+    if (!isNaN(testDate)) {
+      console.log('🧪 ใช้วันที่ทดสอบ:', testDate.toLocaleDateString('th-TH'));
+      return testDate;
+    }
+  }
+
+  // 2) Override ผ่าน window variable: window.__debugDate = '2025-09-10'
+  if (window.__debugDate) {
+    const debugDate = new Date(window.__debugDate + 'T00:00:00');
+    if (!isNaN(debugDate)) {
+      console.log('🔧 ใช้วันที่ debug:', debugDate.toLocaleDateString('th-TH'));
+      return debugDate;
+    }
+  }
+
+  // 3) วันที่จริงจากเครื่อง (force refresh)
+  const now = new Date();
+  return new Date(now.getTime());
+}
+
+function shouldHideFarmerSection(testDate = null) {
+  const now = testDate || getCurrentDate();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  
+  // ตั้งแต่ 1 กันยายน 2025 เป็นต้นไป
+  const shouldHide = (year > 2025) || (year === 2025 && month >= 9);
+  
+  console.log(`📅 วันที่ปัจจุบัน: ${now.toLocaleDateString('th-TH')} (${year}-${month})`);
+  console.log(`👨‍🌾 ซ่อนทะเบียนเกษตรกร: ${shouldHide}`);
+  
+  return shouldHide;
+}
+
+// ฟังก์ชันตรวจสอบวันที่สำหรับการแสดงผลผลิตเมล็ดกาแฟ
+function shouldShowBeanYieldSection(testDate = null) {
+  const now = testDate || getCurrentDate();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  
+  // ตั้งแต่ 1 ธันวาคม 2025 เป็นต้นไป
+  const shouldShow = (year > 2025) || (year === 2025 && month >= 12);
+  
+  console.log(`☕ แสดงผลผลิตเมล็ดกาแฟ: ${shouldShow}`);
+  
+  return shouldShow;
+}
+
+// =========================
+// 👨‍🌾 ระบบจัดการข้อมูลทะเบียนเกษตรกร
+// =========================
+
+// บันทึกข้อมูลทะเบียนเกษตรกรจากฟอร์ม
+function saveFarmerData() {
+  const farmerFields = [
+    'farmer_name', 'age', 'coffee_experience', 'planting_area', 'address', 
+    'gps_coordinates', 'water_system', 'fertilizer_type', 'fertilizer_formula',
+    'fertilizer_frequency', 'fertilizer_amount', 'soil_problems', 'yield_problems',
+    'internet_access', 'yield_per_tree', 'cupping_experience', 'fertilizer_cost',
+    'labor_cost', 'other_costs'
+  ];
+
+  farmerFields.forEach(fieldId => {
+    const el = document.getElementById(fieldId);
+    if (el && el.value !== '') {
+      farmerData[fieldId] = el.value;
+    }
+  });
+  
+  console.log('💾 บันทึกข้อมูลทะเบียนเกษตรกร:', farmerData);
+}
+
+// Global cache สำหรับข้อมูลทะเบียนเกษตรกร
+let farmerDataCache = null;
+let farmerDataLoaded = false;
+
+// ดึงข้อมูลทะเบียนเกษตรกรที่บันทึกไว้ (Optimized)
+function getFarmerData(fieldId) {
+  // ใช้ข้อมูลจาก memory cache ก่อน
+  if (farmerData[fieldId] && farmerData[fieldId] !== '') {
+    return farmerData[fieldId];
+  }
+  
+  // ใช้ข้อมูลจาก database cache
+  if (farmerDataCache && farmerDataCache[fieldId]) {
+    return farmerDataCache[fieldId];
+  }
+  
+  return '';
+}
+
+// ดึงข้อมูลทะเบียนเกษตรกรแบบตัวเลข (Optimized)
+function getFarmerNumber(fieldId) {
+  const value = getFarmerData(fieldId);
+  if (!value || value === '') return null;
+  const parsed = Number(value);
+  if (isNaN(parsed)) return null;
+  
+  const positiveOnlyFields = ['age', 'coffee_experience', 'planting_area', 'fertilizer_frequency', 
+                             'fertilizer_amount', 'yield_per_tree', 'fertilizer_cost', 'labor_cost', 'other_costs'];
+  if (positiveOnlyFields.includes(fieldId) && parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+// ดึงข้อมูลทะเบียนเกษตรกรจากฐานข้อมูล (ต้นที่ 1 ของแปลงเดียวกัน)
+async function loadFarmerDataFromDatabase() {
+  // ถ้าโหลดแล้วและมี cache ให้ใช้เลย
+  if (farmerDataLoaded && farmerDataCache) {
+    console.log('📋 ใช้ข้อมูลจาก cache');
+    return true;
+  }
+
+  const mountain = document.getElementById('mountain')?.value;
+  const plotNumber = document.getElementById('plot_number')?.value;
+  
+  if (!mountain || !plotNumber) {
+    console.log('❌ ไม่มีข้อมูลดอยหรือแปลงเพื่อค้นหา');
+    farmerDataLoaded = true;
+    farmerDataCache = {};
+    return false;
+  }
+  
+  console.log('🔍 ค้นหาข้อมูลทะเบียนเกษตรกรจากต้นที่ 1 ของแปลง:', { mountain, plotNumber });
+  
+  try {
+    // ค้นหาต้นที่ 1 ของแปลงเดียวกันที่มีข้อมูลทะเบียนเกษตรกร (จำกัดผลลัพธ์)
+    const querySnapshot = await db.collection("soil_tests_new")
+      .where('mountain', '==', mountain)
+      .where('plot_number', '==', plotNumber)
+      .where('coffee_tree', '==', '1')
+      .orderBy('createdAt', 'desc')
+      .limit(5) // จำกัดผลลัพธ์เพื่อความเร็ว
+      .get();
+    
+    console.log('📋 ผลการค้นหา:', querySnapshot.empty ? 'ไม่พบ' : `พบ ${querySnapshot.docs.length} รายการ`);
+    
+    // หาต้นที่ 1 ที่มีข้อมูลทะเบียนเกษตรกร
+    let foundData = null;
+    if (!querySnapshot.empty) {
+      for (const doc of querySnapshot.docs) {
+        const data = doc.data();
+        // ตรวจสอบว่ามีข้อมูลทะเบียนเกษตรกรหรือไม่
+        if (data.farmer_name && data.age && data.address) {
+          foundData = data;
+          console.log('✅ พบข้อมูลทะเบียนเกษตรกรจากต้นที่ 1');
+          break;
+        }
+      }
+    }
+    
+    if (foundData) {
+      // อัปเดต farmerData และ cache
+      const farmerFields = [
+        'farmer_name', 'age', 'coffee_experience', 'planting_area', 'address', 
+        'gps_coordinates', 'water_system', 'fertilizer_type', 'fertilizer_formula',
+        'fertilizer_frequency', 'fertilizer_amount', 'soil_problems', 'yield_problems',
+        'internet_access', 'yield_per_tree', 'cupping_experience', 'fertilizer_cost',
+        'labor_cost', 'other_costs'
+      ];
+      
+      // สร้าง cache ใหม่
+      farmerDataCache = {};
+      farmerFields.forEach(fieldId => {
+        if (foundData[fieldId] !== undefined && foundData[fieldId] !== null && foundData[fieldId] !== '') {
+          farmerData[fieldId] = foundData[fieldId];
+          farmerDataCache[fieldId] = foundData[fieldId];
+        }
+      });
+      
+      farmerDataLoaded = true;
+      console.log('💾 อัปเดต farmerData และ cache จากฐานข้อมูล');
+      return true;
+    } else {
+      console.log('❌ ไม่พบข้อมูลทะเบียนเกษตรกรครบถ้วนในต้นที่ 1');
+      farmerDataLoaded = true;
+      farmerDataCache = {};
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาดในการค้นหาข้อมูล:', error);
+    farmerDataLoaded = true;
+    farmerDataCache = {};
+    return false;
+  }
+}
+
+// ฟังก์ชันสำหรับรีเฟรชสถานะ (เรียกได้จาก console)
+// =========================
+// 🌱 จัดการส่วนผลผลิตเมล็ดกาแฟ
+// =========================
+
+window.refreshBeanYieldSectionStatus = function() {
+  const beanYieldSection = document.getElementById('bean_yield_section');
+  const showBeanYield = shouldShowBeanYieldSection();
+  
+  if (beanYieldSection) {
+    const beanYieldRequiredEls = beanYieldSection.querySelectorAll('input, select');
+    
+    if (showBeanYield) {
+      beanYieldSection.style.display = '';
+      // คืน required attributes กลับมา
+      beanYieldRequiredEls.forEach(el => {
+        if (el.dataset.wasRequired === 'true') {
+          el.setAttribute('required', '');
+        }
+        el.disabled = false;
+      });
+    } else {
+      beanYieldSection.style.display = 'none';
+      // เก็บและเอา required attributes ออก
+      beanYieldRequiredEls.forEach(el => {
+        if (el.hasAttribute('required')) {
+          el.dataset.wasRequired = 'true';
+        }
+        el.removeAttribute('required');
+        el.disabled = true;
+      });
+      // ล้างค่าฟิลด์ที่ซ่อน
+      beanYieldRequiredEls.forEach(el => {
+        if (el.type === 'number') {
+          el.value = '';
+        } else if (el.tagName === 'SELECT') {
+          el.selectedIndex = 0;
+        }
+      });
+    }
+  }
+};
+
+window.refreshFarmerSectionStatus = function() {
+  const hideByDate = shouldHideFarmerSection();
+  window.NO_FARMER_SECTION = hideByDate;
+  
+  // อัปเดต UI ทันที
+  const section = document.getElementById('farmer_section');
+  const coffeeSelect = document.getElementById('coffee_tree');
+  
+  if (section) {
+    if (hideByDate) {
+      // ซ่อนทะเบียนเกษตรกรทันทีตามวันที่ (ไม่ว่าจะเลือกต้นไหน)
+      section.style.display = 'none';
+      section.querySelectorAll('[required]').forEach(el => {
+        el.removeAttribute('required');
+        el.disabled = true;
+      });
+    } else {
+      // ถ้าไม่ซ่อนตามวันที่ ให้เช็คตามต้นกาแฟ
+      if (coffeeSelect && coffeeSelect.value === '1') {
+        section.style.display = '';
+        section.querySelectorAll('input, select, textarea').forEach(el => {
+          if (!el.hasAttribute('data-locked')) {
+            el.disabled = false;
+          }
+          // คืนค่า required ตาม original attribute
+          if (el.dataset.originalRequired === 'true') {
+            el.setAttribute('required', '');
+          }
+        });
+      } else if (coffeeSelect && ['2','3','4','5','6'].includes(coffeeSelect.value)) {
+        section.style.display = 'none';
+      } else {
+        // ถ้ายังไม่ได้เลือกต้นกาแฟ แต่ไม่ซ่อนตามวันที่ ให้แสดงปกติ
+        section.style.display = '';
+        section.querySelectorAll('input, select, textarea').forEach(el => {
+          if (!el.hasAttribute('data-locked')) {
+            el.disabled = false;
+          }
+          if (el.dataset.originalRequired === 'true') {
+            el.setAttribute('required', '');
+          }
+        });
+      }
+    }
+  }
+  
+  // จัดการโซนผลผลิตเมล็ดกาแฟ
+  window.refreshBeanYieldSectionStatus();
+  
+  console.log('🔄 รีเฟรชสถานะเสร็จแล้ว - ซ่อนตามวันที่:', hideByDate);
+};
+
+// ฟังก์ชันช่วยในการทดสอบ (เรียกได้จาก console)
+window.testDate = function(dateString) {
+  console.log(`🧪 ทดสอบด้วยวันที่: ${dateString}`);
+  window.__debugDate = dateString;
+  window.refreshFarmerSectionStatus();
+};
+
+// ฟังก์ชันยกเลิกการทดสอบ กลับไปใช้วันที่จริง
+window.resetDate = function() {
+  console.log('🔄 รีเซ็ตกลับไปใช้วันที่จริง');
+  delete window.__debugDate;
+  const url = new URL(window.location);
+  url.searchParams.delete('testDate');
+  window.history.replaceState({}, '', url);
+  window.refreshFarmerSectionStatus();
+};
+
 // --- เริ่มต้นการเชื่อมต่อ Firebase ---
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
@@ -84,80 +400,110 @@ document.getElementById("addFileBtn").addEventListener("click", () => {
 */
 // =========================
 
+// ป้องกันการบันทึกซ้ำ
+let isSaving = false;
+
 document.getElementById("soilForm").addEventListener("submit", async function (e) {
   e.preventDefault();
+  
+  // ป้องกันการกดปุ่มซ้ำ
+  if (isSaving) {
+    console.log('🚫 กำลังบันทึกอยู่...');
+    return;
+  }
+  
+  isSaving = true;
   const saveBtn = e.target.querySelector(".btn-save");
+  const originalText = saveBtn.textContent;
   saveBtn.disabled = true;
-  saveBtn.textContent = "กำลังอัปโหลดไฟล์...";
 
   try {
-    // --- 1) อัปโหลดไฟล์ทั้งหมดขึ้น Cloudinary ---
-    // ใช้ไฟล์ที่สะสมไว้ ถ้าไม่มี ให้ fallback ไปดึงจาก input ปัจจุบันทั้งหมด
+    // แสดงสถานะการอัปโหลดไฟล์
+    saveBtn.textContent = "กำลังอัปโหลดไฟล์...";
+
+    // --- 1) อัปโหลดไฟล์ทั้งหมดขึ้น Cloudinary (ถ้ามี) ---
     let filesToUpload = selectedFiles.slice();
     if (filesToUpload.length === 0) {
       const fileInputs = document.querySelectorAll("input[name='mediaFiles[]']");
       fileInputs.forEach(input => Array.from(input.files || []).forEach(file => filesToUpload.push(file)));
     }
 
-    const uploadPromises = filesToUpload.map(file => {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-      return fetch(CLOUDINARY_URL, { method: "POST", body: formData }).then(res => res.json());
-    });
+    let fileURLs = [];
+    if (filesToUpload.length > 0) {
+      const uploadPromises = filesToUpload.map(file => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+        return fetch(CLOUDINARY_URL, { method: "POST", body: formData }).then(res => res.json());
+      });
 
-    const uploadedResponses = await Promise.all(uploadPromises);
-    const fileURLs = uploadedResponses
-      .filter(res => res && res.secure_url)
-      .map(res => res.secure_url);
+      const uploadedResponses = await Promise.all(uploadPromises);
+      fileURLs = uploadedResponses
+        .filter(res => res && res.secure_url)
+        .map(res => res.secure_url);
+    }
 
+    // แสดงสถานะการบันทึกข้อมูล
     saveBtn.textContent = "กำลังบันทึกข้อมูล...";
 
     // --- 2) รวมข้อมูลจากฟอร์ม (ดึงจากทุก ID ที่มี) ---
     const value = id => {
       const el = document.getElementById(id);
-      return el ? (el.value ?? '') : '';
+      // ถ้า element ถูก disabled หรือไม่มี ให้คืนค่าว่าง
+      if (!el || el.disabled) return '';
+      return el.value ?? '';
     };
 
     const num = id => {
-      const v = value(id);
+      const el = document.getElementById(id);
+      // ถ้า element ถูก disabled หรือไม่มี ให้คืนค่า null
+      if (!el || el.disabled) return null;
+      
+      const v = el.value;
       if (v === '' || v === null || v === undefined) return null;
       const parsed = Number(v);
       if (isNaN(parsed)) return null;
       const positiveOnlyFields = ['age', 'coffee_experience', 'planting_area', 'fertilizer_frequency', 
                                  'fertilizer_amount', 'yield_per_tree', 'fertilizer_cost', 'labor_cost', 
-                                 'other_costs', 'coffee_height', 'coffee_circumference'];
+                                 'other_costs', 'coffee_height', 'coffee_circumference', 'fresh_weight', 'dry_weight'];
       if (positiveOnlyFields.includes(id) && parsed < 0) {
         return null;
       }
       return parsed;
     };
 
+    // *** OPTIMIZED: โหลดข้อมูลทะเบียนเกษตรกรครั้งเดียวก่อนสร้าง formData ***
+    saveBtn.textContent = "กำลังโหลดข้อมูลทะเบียนเกษตรกร...";
+    await loadFarmerDataFromDatabase();
+    
+    saveBtn.textContent = "กำลังเตรียมข้อมูลบันทึก...";
+
     const formDataForFirebase = {
       // ข้อมูลแปลง
       mountain: value("mountain"),
       plot_number: value("plot_number"),
+      coffee_tree: value("coffee_tree"),
 
-      // ทะเบียนเกษตรกร
-      farmer_name: value("farmer_name"),
-      age: num("age"),
-      coffee_experience: num("coffee_experience"),
-      planting_area: num("planting_area"),
-      address: value("address"),
-      gps_coordinates: value("gps_coordinates"),
-      water_system: value("water_system"),
-      fertilizer_type: value("fertilizer_type"),
-      fertilizer_formula: value("fertilizer_formula"),
-      fertilizer_frequency: num("fertilizer_frequency"),
-      fertilizer_amount: num("fertilizer_amount"),
-      soil_problems: value("soil_problems"),
-      yield_problems: value("yield_problems"),
-      internet_access: value("internet_access"),
-      yield_per_tree: num("yield_per_tree"),
-      cupping_experience: value("cupping_experience"),
-      fertilizer_cost: num("fertilizer_cost"),
-      labor_cost: num("labor_cost"),
-      other_costs: num("other_costs"),
+      // ทะเบียนเกษตรกร - ใช้ฟังก์ชันที่ optimize แล้ว (ไม่ async)
+      farmer_name: getFarmerData("farmer_name"),
+      age: getFarmerNumber("age"),
+      coffee_experience: getFarmerNumber("coffee_experience"),
+      planting_area: getFarmerNumber("planting_area"),
+      address: getFarmerData("address"),
+      gps_coordinates: getFarmerData("gps_coordinates"),
+      water_system: getFarmerData("water_system"),
+      fertilizer_type: getFarmerData("fertilizer_type"),
+      fertilizer_formula: getFarmerData("fertilizer_formula"),
+      fertilizer_frequency: getFarmerNumber("fertilizer_frequency"),
+      fertilizer_amount: getFarmerNumber("fertilizer_amount"),
+      soil_problems: getFarmerData("soil_problems"),
+      yield_problems: getFarmerData("yield_problems"),
+      internet_access: getFarmerData("internet_access"),
+      yield_per_tree: getFarmerNumber("yield_per_tree"),
+      cupping_experience: getFarmerData("cupping_experience"),
+      fertilizer_cost: getFarmerNumber("fertilizer_cost"),
+      labor_cost: getFarmerNumber("labor_cost"),
+      other_costs: getFarmerNumber("other_costs"),
 
       // วัดค่าดินแบบพกพา
       n_portable: num("n_portable"),
@@ -177,6 +523,11 @@ document.getElementById("soilForm").addEventListener("submit", async function (e
       disease_problem: value("disease_problem"),
       insect_problem: value("insect_problem"),
       worm_problem: value("worm_problem"),
+
+      // ผลผลิตเมล็ดกาแฟ (ตั้งแต่ธันวาคม 2025)
+      fresh_weight: num("fresh_weight"),
+      dry_weight: num("dry_weight"),
+      bean_quality: value("bean_quality"),
 
       // ไฟล์แนบ
       files: fileURLs,
@@ -198,8 +549,9 @@ document.getElementById("soilForm").addEventListener("submit", async function (e
     // หน้าฟอร์มสร้างข้อมูลใหม่เท่านั้น ไม่อัปเดตข้อมูลเก่า
     await db.collection("soil_tests_new").add(formDataForFirebase);
     
-    alert("บันทึกข้อมูลใหม่เรียบร้อยแล้ว!");
-    window.location.href = "index.html";
+  alert("บันทึกข้อมูลใหม่เรียบร้อยแล้ว!");
+  // หลังบันทึกเสร็จ กลับไปหน้า home
+  window.location.href = "home.html";
   } catch (error) {
     console.error("เกิดข้อผิดพลาด:", error);
     
@@ -214,8 +566,14 @@ document.getElementById("soilForm").addEventListener("submit", async function (e
     
     alert(errorMessage);
   } finally {
+    // รีเซ็ตสถานะการบันทึก
+    isSaving = false;
     saveBtn.disabled = false;
-    saveBtn.textContent = "บันทึกข้อมูล";
+    saveBtn.textContent = originalText;
+    
+    // รีเซ็ต cache ข้อมูลทะเบียนเกษตรกร
+    farmerDataLoaded = false;
+    farmerDataCache = null;
   }
 });
 
@@ -432,10 +790,40 @@ document.addEventListener('DOMContentLoaded', function() {
   // --- ตัวเลือก "แปลงหมายเลข" ตามดอยที่เลือก ---
   const mountainSelect = document.getElementById('mountain');
   const plotSelect = document.getElementById('plot_number');
+  const coffeeTreeSelectInit = document.getElementById('coffee_tree');
+  // เริ่มต้นปิดการเลือกต้นกาแฟ จนกว่าจะเลือกแปลง
+  if (coffeeTreeSelectInit) {
+    coffeeTreeSelectInit.disabled = true;
+    coffeeTreeSelectInit.selectedIndex = 0; // ให้โชว์ placeholder
+  }
 
   mountainSelect.addEventListener('change', function() {
-    plotSelect.innerHTML = '<option value="" disabled selected>-- โปรดเลือกแปลง --</option>';
+    // รีเซ็ต cache ข้อมูลทะเบียนเกษตรกรเมื่อเปลี่ยนดอย
+    farmerDataLoaded = false;
+    farmerDataCache = null;
+    farmerData = {};
+    
+    // รีเซ็ต options ของแปลง
+    if (!this.value) {
+      plotSelect.innerHTML = '<option value="" disabled selected>-- โปรดเลือกดอยก่อน --</option>';
+      plotSelect.disabled = true;
+    } else {
+      plotSelect.innerHTML = '<option value="" disabled selected>-- โปรดเลือกแปลง --</option>';
+      plotSelect.disabled = false; // เปิดให้เลือกแปลงเมื่อมีดอย
+    }
     const selectedMountain = this.value;
+
+    // เมื่อเปลี่ยนดอย ให้รีเซ็ตและปิดการเลือกต้นกาแฟก่อน
+    if (coffeeTreeSelectInit) {
+      coffeeTreeSelectInit.disabled = true;
+      coffeeTreeSelectInit.innerHTML = '<option value="" disabled selected>-- โปรดเลือกดอยและแปลงก่อน --</option>' +
+        '<option value="1">1</option>' +
+        '<option value="2">2</option>' +
+        '<option value="3">3</option>' +
+        '<option value="4">4</option>' +
+        '<option value="5">5</option>' +
+        '<option value="6">6</option>';
+    }
 
     if (selectedMountain === 'ดอยช้าง') {
       for (let i = 1; i <= 50; i++) {
@@ -522,23 +910,36 @@ function setVal(id, v){
 }
 
 async function prefillFarmerSection() {
-  const mountain = document.getElementById('mountain').value;
-  const plot = document.getElementById('plot_number').value;
-  if (!mountain || !plot) {
-    clearFormFields(); // ล้างค่าและปลดล็อคเมื่อไม่มีการเลือก
+  const mountain = document.getElementById('mountain')?.value;
+  const plot = document.getElementById('plot_number')?.value;
+  const coffeeTree = document.getElementById('coffee_tree')?.value;
+
+  // ถ้ายังเลือกไม่ครบ ล้างทุกฟิลด์และปลดล็อค
+  if (!mountain || !plot || !coffeeTree) {
+    clearFormFields();
     return;
   }
 
-  // helper: fallback query ที่ไม่ใช้ orderBy (ไม่ต้องมี index)
+  // ตรวจสอบว่าต้องซ่อนตามวันที่ไหม (ตั้งแต่กันยายน 2025 เป็นต้นไป)
+  const hideByDate = shouldHideFarmerSection();
+  
+  // ถ้าไม่ใช่ต้นที่ 1 (ซึ่งไม่ได้กรอกทะเบียนเกษตรกร) ให้ล้าง + ปลดล็อค เผื่อสลับกลับมา
+  if (coffeeTree !== '1') {
+    clearFormFields();
+    unlockAllFields();
+    return;
+  }
+
+  // ต้นที่ 1: ดึงข้อมูลล่าสุด หรือ ลิ้งค์จากข้อมูลเก่า (ถ้าหลัง ก.ย. 2025)
   const fallbackQuery = async () => {
     const fb = await db.collection('soil_tests_new')
       .where('mountain','==', mountain)
       .where('plot_number','==', plot)
+      .where('coffee_tree','==', coffeeTree)
       .get();
     const docs = [];
     fb.forEach(d => docs.push({id:d.id, ...d.data()}));
     if (!docs.length) return null;
-    // sort เอาใหม่สุดเอง
     docs.sort((a,b)=>{
       const ta = a.createdAt?.seconds ? a.createdAt.seconds*1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
       const tb = b.createdAt?.seconds ? b.createdAt.seconds*1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
@@ -551,6 +952,7 @@ async function prefillFarmerSection() {
     const snap = await db.collection('soil_tests_new')
       .where('mountain','==', mountain)
       .where('plot_number','==', plot)
+      .where('coffee_tree','==', coffeeTree)
       .orderBy('createdAt','desc')
       .limit(1)
       .get();
@@ -560,30 +962,91 @@ async function prefillFarmerSection() {
     else data = await fallbackQuery();
 
     if (!data) {
-      clearFormFields(); // ล้างค่าเมื่อไม่พบข้อมูล
+      // ไม่มีข้อมูลเก่า ให้ปลดล็อคให้กรอกได้
+      unlockAllFields();
       return;
     }
-    fillFormFromDoc(data);
-    toast('โหลดข้อมูลเก่าสำเร็จ');
+    await fillFormFromDoc(data);
   } catch (err) {
-    // ถ้าไม่มี index ให้ fallback อัตโนมัติ
     if (err?.code === 'failed-precondition') {
       const data = await fallbackQuery();
-      if (data) {
-        fillFormFromDoc(data);
-        toast('โหลดข้อมูลเก่าสำเร็จ');
-      } else {
-        clearFormFields(); // ล้างค่าเมื่อไม่พบข้อมูล
-      }
+      if (data) await fillFormFromDoc(data); else unlockAllFields();
     } else {
       console.warn('prefill error:', err);
+      unlockAllFields();
     }
   }
 }
 
-function fillFormFromDoc(d){
-  // ฟิลด์ที่จะถูกล็อค
-  const fieldsToLock = [
+async function fillFormFromDoc(d){
+  // ตรวจสอบว่าต้องซ่อนตามวันที่ไหม
+  const hideByDate = shouldHideFarmerSection();
+  
+  // ถ้าเป็นหลัง ก.ย. 2025 และข้อมูลปัจจุบันไม่มีทะเบียนเกษตรกร ให้หาจากต้นที่ 1 ข้อมูลเก่า
+  if (hideByDate && (!d.farmer_name || !d.age || !d.address)) {
+    console.log('🔍 หลัง ก.ย. 2025 และไม่มีทะเบียนเกษตรกร - ค้นหาจากข้อมูลเก่า');
+    const mountain = document.getElementById('mountain')?.value;
+    const plot = document.getElementById('plot_number')?.value;
+    
+    if (mountain && plot) {
+      try {
+        let primarySnap = null;
+        try {
+          primarySnap = await db.collection('soil_tests_new')
+            .where('mountain','==', mountain)
+            .where('plot_number','==', plot)
+            .where('coffee_tree','==', '1')
+            .orderBy('createdAt','desc')
+            .get();
+        } catch(err) {
+          // fallback query
+          const fb = await db.collection('soil_tests_new')
+            .where('mountain','==', mountain)
+            .where('plot_number','==', plot)
+            .where('coffee_tree','==', '1')
+            .get();
+          const docs = [];
+          fb.forEach(doc => docs.push({id:doc.id, ...doc.data()}));
+          if (docs.length) {
+            docs.sort((a,b)=>{
+              const ta = a.createdAt?.seconds ? a.createdAt.seconds*1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+              const tb = b.createdAt?.seconds ? b.createdAt.seconds*1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+              return tb - ta;
+            });
+            primarySnap = { empty:false, docs:docs.map(doc => ({data:()=>doc})) };
+          }
+        }
+        
+        // หาต้นที่ 1 ที่มีข้อมูลทะเบียนเกษตรกร
+        if (primarySnap && !primarySnap.empty) {
+          for (const doc of primarySnap.docs) {
+            const candidateData = doc.data();
+            if (candidateData.farmer_name && candidateData.age && candidateData.address) {
+              console.log('✅ พบข้อมูลทะเบียนเกษตรกรจากต้นที่ 1 ข้อมูลเก่า');
+              // ผสานข้อมูล
+              const farmerKeys = [
+                'farmer_name','age','coffee_experience','planting_area','address',
+                'water_system','fertilizer_type','fertilizer_formula','fertilizer_frequency',
+                'fertilizer_amount','soil_problems','yield_problems','internet_access',
+                'yield_per_tree','cupping_experience','fertilizer_cost','labor_cost','other_costs','gps_coordinates'
+              ];
+              farmerKeys.forEach(key => {
+                if (!d[key] && candidateData[key]) {
+                  d[key] = candidateData[key];
+                }
+              });
+              break;
+            }
+          }
+        }
+      } catch(err) {
+        console.warn('ไม่สามารถค้นหาข้อมูลทะเบียนเกษตรกรจากข้อมูลเก่าได้:', err);
+      }
+    }
+  }
+
+  // ฟิลด์ที่จะถูกล็อค (ถ้าไม่ซ่อนตามวันที่)
+  const fieldsToLock = hideByDate ? [] : [
     'farmer_name', 'age', 'coffee_experience', 'planting_area', 'address', 
     'gps_coordinates', 'water_system', 'fertilizer_type', 'fertilizer_formula',
     'fertilizer_frequency', 'fertilizer_amount', 'soil_problems', 'yield_problems',
@@ -610,6 +1073,17 @@ function fillFormFromDoc(d){
   setVal('fertilizer_cost', d.fertilizer_cost);
   setVal('labor_cost', d.labor_cost);
   setVal('other_costs', d.other_costs);
+
+  // ฟิลด์ผลผลิตเมล็ดกาแฟ (ตั้งแต่ธันวาคม 2025)
+  // ไม่ prefill ข้อมูลเหล่านี้เมื่ออยู่ในช่วงที่แสดงส่วนนี้ เพื่อให้ผู้ใช้กรอกข้อมูลใหม่ทุกครั้ง
+  const shouldShowBean = shouldShowBeanYieldSection();
+  if (!shouldShowBean) {
+    // ถ้ายังไม่ถึงเวลาแสดงส่วนนี้ ให้ prefill ตามปกติ
+    setVal('fresh_weight', d.fresh_weight);
+    setVal('dry_weight', d.dry_weight);
+    setVal('bean_quality', d.bean_quality);
+  }
+  // ถ้าอยู่ในช่วงที่แสดงส่วนนี้แล้ว ไม่ prefill เพื่อให้ผู้ใช้กรอกใหม่
 
   // ล็อคฟิลด์และเปลี่ยนสี
   fieldsToLock.forEach(fieldId => {
@@ -673,8 +1147,24 @@ function clearFormFields() {
 
 // hook: ให้ prefill ทำงานแน่นอนหลังผู้ใช้เลือกแปลง
 document.addEventListener('DOMContentLoaded', () => {
+  // ตั้งแต่กันยายน 2025 เป็นต้นไป ซ่อน/ไม่บังคับกรอกทะเบียนเกษตรกร
+  (function handleFarmerSectionByDate(){
+    const disableFarmer = shouldHideFarmerSection();
+    window.NO_FARMER_SECTION = disableFarmer;
+    
+    if (!disableFarmer) return; // ก่อนกันยายน 2025 ทำงานปกติ
+    
+    const section = document.getElementById('farmer_section');
+    if (section) {
+      section.style.display = 'none';
+      // เอา required ออกทุกฟิลด์ภายใน
+      section.querySelectorAll('[required]').forEach(el => el.removeAttribute('required'));
+    }
+  })();
+
   const mountainSelect = document.getElementById('mountain');
   const plotSelect = document.getElementById('plot_number');
+  const coffeeTreeSelect = document.getElementById('coffee_tree');
 
   mountainSelect.addEventListener('change', function() {
     clearFormFields(); // ล้างค่าและปลดล็อคเมื่อเปลี่ยนดอย
@@ -684,6 +1174,114 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   plotSelect.addEventListener('change', prefillFarmerSection);
+  coffeeTreeSelect.addEventListener('change', prefillFarmerSection);
+
+  // เปิดให้เลือกต้นกาแฟได้หลังเลือกแปลงแล้ว
+  plotSelect.addEventListener('change', function() {
+  // รีเซ็ต cache ข้อมูลทะเบียนเกษตรกรเมื่อเปลี่ยนแปลง
+  farmerDataLoaded = false;
+  farmerDataCache = null;
+  farmerData = {};
+  
+  // ล้างค่าทะเบียนเกษตรกรทุกครั้งที่เปลี่ยนแปลง (ตามคำขอ)
+  clearFormFields();
+  unlockAllFields();
+    if (this.value) {
+      coffeeTreeSelect.disabled = false;
+      // อัปเดต placeholder ถ้ายังไม่เลือกต้น
+      if (!coffeeTreeSelect.value) {
+        const firstOpt = coffeeTreeSelect.querySelector('option[disabled]');
+        if (firstOpt) firstOpt.textContent = '-- โปรดเลือกต้นกาแฟ --';
+      }
+    } else {
+      coffeeTreeSelect.disabled = true;
+      coffeeTreeSelect.selectedIndex = 0;
+      const firstOpt = coffeeTreeSelect.querySelector('option[disabled]');
+      if (firstOpt) firstOpt.textContent = '-- โปรดเลือกดอยและแปลงก่อน --';
+    }
+  });
+});
+
+// =========================
+// �️ แสดง/ซ่อน ทะเบียนเกษตรกร ตามต้นกาแฟ (เฉพาะต้นที่ 1 เท่านั้นที่กรอก)
+// =========================
+document.addEventListener('DOMContentLoaded', () => {
+  const coffeeTreeSelect = document.getElementById('coffee_tree');
+  const farmerSection = document.getElementById('farmer_section');
+  if (!coffeeTreeSelect || !farmerSection) return;
+
+  // จด element ที่ required เดิมไว้เพื่อคืนค่าได้ภายหลัง
+  const farmerRequiredEls = Array.from(farmerSection.querySelectorAll('[required]'));
+  
+  // เก็บสถานะ required เดิมไว้
+  farmerRequiredEls.forEach(el => {
+    el.dataset.wasRequired = 'true';
+  });
+
+  function toggleFarmerSection(){
+    // ตรวจสอบว่าต้องซ่อนตามวันที่ไหม (ใช้ฟังก์ชันเดียวกับที่ซ่อนใน head)
+    const hideByDate = shouldHideFarmerSection();
+    
+    const val = coffeeTreeSelect.value;
+    if (hideByDate || (val && val !== '1')) {
+      // บันทึกข้อมูลทะเบียนเกษตรกรก่อนซ่อน
+      saveFarmerData();
+      
+      // ถ้าเป็นต้นที่ 2-6 ให้โหลดข้อมูลจากฐานข้อมูล
+      if (val && val !== '1') {
+        loadFarmerDataFromDatabase().then(success => {
+          if (success) {
+            console.log('✅ โหลดข้อมูลทะเบียนเกษตรกรสำหรับต้นที่', val, 'เรียบร้อย');
+          } else {
+            console.log('⚠️ ไม่สามารถโหลดข้อมูลทะเบียนเกษตรกรสำหรับต้นที่', val);
+          }
+        });
+      }
+      
+      // ซ่อน + ปิดการใช้งาน + เอา required ออก
+      if (farmerSection.style.display !== 'none') {
+        farmerSection.style.display = 'none';
+        farmerRequiredEls.forEach(el => {
+          if (el.hasAttribute('required')) el.dataset.wasRequired = 'true';
+          el.removeAttribute('required');
+          el.disabled = true;
+        });
+      }
+    } else {
+      // แสดง + คืน required + เปิดการแก้ไข (เฉพาะก่อนกันยายน 2025 และต้นที่ 1)
+      if (farmerSection.style.display === 'none') {
+        farmerSection.style.display = '';
+        farmerRequiredEls.forEach(el => {
+          if (el.dataset.wasRequired) el.setAttribute('required','');
+          el.disabled = false;
+        });
+      }
+    }
+  }
+
+  coffeeTreeSelect.addEventListener('change', toggleFarmerSection);
+  
+  // เพิ่ม event listeners สำหรับฟิลด์ทะเบียนเกษตรกรเพื่อบันทึกข้อมูลอัตโนมัติ
+  const farmerFields = [
+    'farmer_name', 'age', 'coffee_experience', 'planting_area', 'address', 
+    'gps_coordinates', 'water_system', 'fertilizer_type', 'fertilizer_formula',
+    'fertilizer_frequency', 'fertilizer_amount', 'soil_problems', 'yield_problems',
+    'internet_access', 'yield_per_tree', 'cupping_experience', 'fertilizer_cost',
+    'labor_cost', 'other_costs'
+  ];
+
+  farmerFields.forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      field.addEventListener('input', saveFarmerData);
+      field.addEventListener('change', saveFarmerData);
+    }
+  });
+  
+  // เรียกครั้งแรกเผื่อโหลดมามีค่าอยู่ แต่ไม่บังคับเปลี่ยนถ้าซ่อนอยู่แล้ว
+  if (!shouldHideFarmerSection() || farmerSection.style.display !== 'none') {
+    toggleFarmerSection();
+  }
 });
 
 // =========================
@@ -692,19 +1290,143 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ป้องกันการเปลี่ยนค่า input number เมื่อเลื่อนลูกกลิ้งเมาส์
 function preventNumberInputScroll() {
-  const numberInputs = document.querySelectorAll('input[type="number"]');
-  
-  numberInputs.forEach(function(input) {
-    // ป้องกันการเปลี่ยนค่าเฉพาะเมื่อ input ถูก focus
-    input.addEventListener('wheel', function(e) {
-      // ถ้า input นี้กำลังถูก focus อยู่ ให้ป้องกันการเปลี่ยนค่า
-      if (document.activeElement === this) {
-        e.preventDefault();
-      }
-      // ถ้าไม่ได้ focus ก็ให้เลื่อนหน้าได้ปกติ
-    });
+  // ไม่ต้องทำอะไรที่นี่ เพราะใช้ Global event listener แทน
+  console.log('🔒 preventNumberInputScroll: ใช้ Global event listener แทน');
+}
+
+// ป้องกันการใช้ Arrow Keys เปลี่ยนค่า input number
+function preventNumberInputArrowKeys() {
+  document.addEventListener('keydown', function(e) {
+    if (e.target.type === 'number' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+    }
   });
 }
 
 // เรียกใช้ฟังก์ชันเมื่อโหลดหน้าเสร็จ
-document.addEventListener('DOMContentLoaded', preventNumberInputScroll);
+document.addEventListener('DOMContentLoaded', function() {
+  preventNumberInputScroll();
+  preventNumberInputArrowKeys();
+  console.log('🔒 Form page: ป้องกันลูกกลิ้งเมาส์และ arrow keys สำหรับ input number แล้ว');
+});
+
+// =========================
+// 🧪 Auto Format Fertilizer Formula
+// =========================
+
+function setupFertilizerFormatting() {
+  const fertilizerInput = document.getElementById('fertilizer_formula');
+  if (!fertilizerInput) return;
+
+  let lastValue = '';
+
+  fertilizerInput.addEventListener('input', function(e) {
+    let value = e.target.value;
+    
+    // เก็บตำแหน่ง cursor
+    let cursorPosition = e.target.selectionStart;
+    
+    // ลบทุกอย่างที่ไม่ใช่ตัวเลข
+    let numbersOnly = value.replace(/\D/g, '');
+    
+    // จำกัดให้มีแค่ 6 หลัก
+    if (numbersOnly.length > 6) {
+      numbersOnly = numbersOnly.substring(0, 6);
+    }
+    
+    // จัดรูปแบบเป็น xx-xx-xx
+    let formattedValue = '';
+    if (numbersOnly.length > 0) {
+      if (numbersOnly.length <= 2) {
+        formattedValue = numbersOnly;
+      } else if (numbersOnly.length <= 4) {
+        formattedValue = numbersOnly.substring(0, 2) + '-' + numbersOnly.substring(2);
+      } else {
+        formattedValue = numbersOnly.substring(0, 2) + '-' + 
+                        numbersOnly.substring(2, 4) + '-' + 
+                        numbersOnly.substring(4);
+      }
+    }
+    
+    // อัปเดตค่าใน input
+    e.target.value = formattedValue;
+    
+    // ปรับตำแหน่ง cursor
+    if (formattedValue.length > lastValue.length) {
+      // กำลังพิมพ์เพิ่ม
+      let newCursorPosition = cursorPosition;
+      if (cursorPosition === 3 || cursorPosition === 6) {
+        newCursorPosition = cursorPosition + 1;
+      }
+      e.target.setSelectionRange(newCursorPosition, newCursorPosition);
+    }
+    
+    lastValue = formattedValue;
+  });
+
+  // จัดการ backspace เพื่อลบได้ง่ายขึ้น
+  fertilizerInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Backspace') {
+      let cursorPosition = e.target.selectionStart;
+      let value = e.target.value;
+      
+      // ถ้า cursor อยู่หลัง - ให้ลบ - และตัวเลขด้วยกัน
+      if (cursorPosition > 0 && value[cursorPosition - 1] === '-') {
+        e.preventDefault();
+        let newValue = value.substring(0, cursorPosition - 2) + value.substring(cursorPosition);
+        e.target.value = newValue;
+        e.target.setSelectionRange(cursorPosition - 2, cursorPosition - 2);
+        
+        // trigger input event เพื่อให้จัดรูปแบบใหม่
+        e.target.dispatchEvent(new Event('input'));
+      }
+    }
+  });
+
+  // ตรวจสอบความถูกต้องก่อนส่งฟอร์ม
+  const form = document.getElementById('soilForm');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      const fertilizerValue = fertilizerInput.value;
+      const numbersOnly = fertilizerValue.replace(/\D/g, '');
+      
+      if (fertilizerValue && numbersOnly.length !== 6) {
+        e.preventDefault();
+        alert('กรุณากรอกเบอร์ปุ๋ยให้ครบ 6 หลัก เช่น 15-15-15');
+        fertilizerInput.focus();
+        return false;
+      }
+    });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', setupFertilizerFormatting);
+document.addEventListener('DOMContentLoaded', window.refreshFarmerSectionStatus);
+document.addEventListener('DOMContentLoaded', window.refreshBeanYieldSectionStatus);
+document.addEventListener('DOMContentLoaded', () => initNavbar('form'));
+
+// =========================
+// 🔒 Global Event Listeners สำหรับป้องกัน Input Number
+// =========================
+
+// ป้องกันการเปลี่ยนค่า input[type="number"] แบบ Global
+document.addEventListener('wheel', function(e) {
+  if (e.target.type === 'number') {
+    // ป้องกันการเปลี่ยนค่าเฉพาะ input แต่ให้เลื่อนหน้าจอได้
+    e.preventDefault();
+    
+    // ให้หน้าจอเลื่อนได้ปกติ
+    window.scrollBy(0, e.deltaY);
+  }
+}, { passive: false });
+
+// ป้องกันการใช้ Arrow Keys แบบ Global
+document.addEventListener('keydown', function(e) {
+  if (e.target.type === 'number' && 
+      (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+      document.activeElement === e.target) {
+    e.preventDefault();
+  }
+});
+
+console.log('🔒 Form page: Global protection for input[type="number"] initialized');
