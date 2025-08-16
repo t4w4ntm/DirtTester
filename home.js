@@ -39,7 +39,7 @@ function createListItem(docId, d) {
     : '-';
 
   const title = d.plot_number || '(ไม่ระบุแปลง)';
-  const subtitle = d.mountain || '(ไม่ระบุดอย)';
+  const subtitle = [d.mountain, d.coffee_tree ? `ต้นที่ ${d.coffee_tree}` : ''].filter(Boolean).join(' - ') || '(ไม่ระบุดอย)';
 
   const item = document.createElement('a');
   item.className = 'data-item';
@@ -82,7 +82,7 @@ function applySearchFilter(query) {
 
   const filtered = allItems.filter(({ data }) => {
     const title = (data.plot_number || '').toLowerCase();
-    const subtitle = (data.mountain || '').toLowerCase();
+    const subtitle = [(data.mountain || ''), (data.coffee_tree ? `ต้นที่ ${data.coffee_tree}` : '')].filter(Boolean).join(' - ').toLowerCase();
 
     let dateStr = '';
     const dt = toDateSafe(data.createdAt);
@@ -150,6 +150,7 @@ function initSearchUI() {
 }
 
 window.onload = () => {
+  initNavbar('home');
   initSearchUI();
   displayDataList();
 };
