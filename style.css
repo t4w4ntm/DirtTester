@@ -252,29 +252,100 @@ legend {
 
 .file-row {
     display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    align-items: center;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
     padding: 1rem;
     background: var(--gray-100);
     border-radius: var(--border-radius);
     border: 1px solid var(--gray-200);
 }
 
+.file-container {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-label {
+    margin-top: 5px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    min-height: 20px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    text-align: center;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    word-break: break-all;
+}
+
+.file-label.select-button {
+    border-radius: var(--border-radius);
+    background: rgba(28, 180, 84, 0.8);
+    color: white;
+}
+
+.file-label.select-button:hover {
+    background: rgba(19, 128, 59, 0.8);
+}
+
+.file-label.selected {
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    color: #333;
+}
+
+.file-label.selected:hover {
+    background: #e0e0e0;
+}
+
+.file-preview-container {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+}
+
+.image-preview {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-preview img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #ddd;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
 .remove-btn {
     background: var(--danger-color);
     color: var(--white);
     border: none;
-    padding: 0.5rem 1rem;
+    padding: 8px 12px;
+    margin-top: 5px;
     border-radius: var(--border-radius);
     cursor: pointer;
     font-weight: 500;
     font-family: 'Kanit', sans-serif;
     transition: var(--transition);
+    height: fit-content;
+    flex-shrink: 0;
+    font-size: 14px;
 }
 
 .remove-btn:hover {
-    background: #ff5252;
+    background: #da190b;
 }
 
 .btn-back {
@@ -413,6 +484,16 @@ legend {
     
     .file-row {
         flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .file-container {
+        width: 100%;
+    }
+    
+    .remove-btn {
+        align-self: flex-end;
+        margin-top: 0.5rem;
     }
     .modal-content {
         width: 95%;
