@@ -362,9 +362,38 @@ function createFileInput() {
   input.name = "mediaFiles[]";
   input.accept = ".jpg,.jpeg,.png";
   input.multiple = true;
+  
+  // ซ่อน input element
+  input.style.display = "none";
+  
+  // สร้าง container สำหรับ file label และ preview
+  const fileContainer = document.createElement("div");
+  fileContainer.classList.add("file-container");
+  
+  // สร้าง label ที่ทำหน้าที่เป็นปุ่มเลือกไฟล์และแสดงชื่อไฟล์
+  const fileLabel = document.createElement("div");
+  fileLabel.classList.add("file-label", "select-button");
+  fileLabel.textContent = "เลือกไฟล์";
+  
+  // เมื่อคลิก label จะเป็นการเปิด file dialog
+  fileLabel.addEventListener("click", () => {
+    input.click();
+  });
+  
+  // สร้าง container สำหรับแสดงรูปภาพ (ด้านล่าง)
+  const previewContainer = document.createElement("div");
+  previewContainer.classList.add("file-preview-container");
+  
   // เมื่อเลือกไฟล์ ให้สะสมไฟล์ไว้ เพื่อให้เลือกหลายรอบได้จริง
   input.addEventListener("change", () => {
     addToSelectedFiles(input.files);
+    
+    // อัปเดตชื่อไฟล์ใน label
+    updateFileLabel(input.files, fileLabel);
+    
+    // แสดงรูปภาพด้านล่าง
+    displaySelectedImages(input.files, previewContainer);
+    
     // ล้างค่าใน input เพื่อให้สามารถเลือกไฟล์เดิมอีกรอบได้ถ้าต้องการ และป้องกันการแทนที่ไฟล์ก่อนหน้า
     input.value = "";
   });
@@ -375,9 +404,56 @@ function createFileInput() {
   removeBtn.classList.add("remove-btn");
   removeBtn.addEventListener("click", () => row.remove());
 
+  // เพิ่ม element ตามลำดับ: input ซ่อน, file container (ซ้าย), ปุ่มลบ (ขวา)
+  fileContainer.appendChild(fileLabel);
+  fileContainer.appendChild(previewContainer);
+  
   row.appendChild(input);
+  row.appendChild(fileContainer);
   row.appendChild(removeBtn);
+  
   return row;
+}
+
+// ฟังก์ชันสำหรับอัปเดตชื่อไฟล์ใน label
+function updateFileLabel(fileList, label) {
+  const files = Array.from(fileList || []);
+  
+  if (files.length === 0) {
+    label.textContent = "เลือกไฟล์";
+    label.className = "file-label select-button";
+  } else if (files.length === 1) {
+    label.textContent = files[0].name;
+    label.className = "file-label selected";
+  } else {
+    label.textContent = `เลือกไฟล์แล้ว ${files.length} ไฟล์`;
+    label.className = "file-label selected";
+  }
+}
+
+// ฟังก์ชันสำหรับแสดงรูปภาพด้านล่าง
+function displaySelectedImages(fileList, container) {
+  // ล้างการแสดงผลเดิม
+  container.innerHTML = '';
+  
+  Array.from(fileList || []).forEach(file => {
+    // แสดงเฉพาะไฟล์รูปภาพ
+    if (file.type.startsWith('image/')) {
+      const imgContainer = document.createElement("div");
+      imgContainer.classList.add("image-preview");
+      
+      const img = document.createElement("img");
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      
+      imgContainer.appendChild(img);
+      container.appendChild(imgContainer);
+    }
+  });
 }
 
 document.getElementById("addFileBtn").addEventListener("click", () => {
